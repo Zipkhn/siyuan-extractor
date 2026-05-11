@@ -21,10 +21,13 @@ export function parseSiyuanHtml(html: string): {
 } {
     const $ = load(html, { decodeEntities: true });
     const unsupportedTypes = new Set<string>();
-    // Cheerio wraps fragments in <html><head/><body>...</body></html>. Drill in.
-    const bodyChildren = $("body").children().get();
-    const rootElements = bodyChildren.length > 0 ? bodyChildren : $.root().children().get();
-    const blocks = parseChildBlocks(rootElements, $, unsupportedTypes);
+    // Siyuan's getDoc HTML may wrap content in protyle containers
+    // (.protyle-wysiwyg, .protyle-content, …) before reaching block divs.
+    // Find every typed block whose nearest typed ancestor is none = real top-level.
+    const topLevel = $('[data-type^="Node"]')
+        .toArray()
+        .filter((el) => $(el).parents('[data-type^="Node"]').length === 0);
+    const blocks = parseChildBlocks(topLevel, $, unsupportedTypes);
     return { blocks, unsupportedTypes };
 }
 
