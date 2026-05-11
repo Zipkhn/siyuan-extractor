@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.env
+.env.example
+.gitignore
+.dockerignore
+.vscode
+.idea
+.claude
+CLAUDE.md
+README.md
+snapshots
+*.log
