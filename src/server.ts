@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import { timingSafeEqual } from "node:crypto";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
@@ -14,6 +15,32 @@ const app = Fastify({
     disableRequestLogging: false,
     trustProxy: false,
     bodyLimit: 1024 * 1024, // 1 MB — webhooks are tiny
+});
+
+// The plugin runs in the user's browser at http://localhost:6806 and POSTs
+// here cross-origin. Allow that explicitly. In prod, restrict to the actual
+// Siyuan origin.
+await app.register(cors, {
+    origin: (origin, cb) => {
+        if (!origin) {
+            // Same-origin / curl / server-to-server : allow.
+            cb(null, true);
+            return;
+        }
+        try {
+            const { hostname } = new URL(origin);
+            if (hostname === "localhost" || hostname === "127.0.0.1") {
+                cb(null, true);
+                return;
+            }
+        } catch {
+            // fallthrough
+        }
+        cb(new Error(`Origin ${origin} not allowed`), false);
+    },
+    methods: ["POST", "GET", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "X-Publish-Secret"],
+    credentials: false,
 });
 
 app.get("/health", async () => ({ status: "ok" }));
