@@ -21,7 +21,10 @@ export function parseSiyuanHtml(html: string): {
 } {
     const $ = load(html, { decodeEntities: true });
     const unsupportedTypes = new Set<string>();
-    const blocks = parseChildBlocks($.root().children().get(), $, unsupportedTypes);
+    // Cheerio wraps fragments in <html><head/><body>...</body></html>. Drill in.
+    const bodyChildren = $("body").children().get();
+    const rootElements = bodyChildren.length > 0 ? bodyChildren : $.root().children().get();
+    const blocks = parseChildBlocks(rootElements, $, unsupportedTypes);
     return { blocks, unsupportedTypes };
 }
 
@@ -55,7 +58,7 @@ function parseBlock(el: Element, $: CheerioAPI, unsupported: Set<string>): Snaps
                 id,
                 type: "NodeHeading",
                 level,
-                text: cleanText($el.text()),
+                text: extractBlockText($el),
                 marks: [],
             };
         }
@@ -63,7 +66,7 @@ function parseBlock(el: Element, $: CheerioAPI, unsupported: Set<string>): Snaps
             return {
                 id,
                 type: "NodeParagraph",
-                text: cleanText($el.text()),
+                text: extractBlockText($el),
                 marks: [],
             };
         }
@@ -112,8 +115,22 @@ function parseBlock(el: Element, $: CheerioAPI, unsupported: Set<string>): Snaps
     }
 }
 
+/**
+ * Extract the visible text from a block, stripping Siyuan's editor metadata
+ * (`.protyle-attr` divs). Operates on a clone so the original tree is untouched.
+ */
+function extractBlockText($el: ReturnType<CheerioAPI>): string {
+    const clone = $el.clone();
+    clone.find(".protyle-attr").remove();
+    return cleanText(clone.text());
+}
+
+// Strip Unicode invisible chars Siyuan sprinkles for editing/cursor purposes.
+// U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+2060 word joiner, U+FEFF BOM.
+const INVISIBLE_CHARS = /[​‌‍⁠﻿]/g;
+
 function cleanText(text: string): string {
-    return text.replace(/​/g, "").replace(/\s+/g, " ").trim();
+    return text.replace(INVISIBLE_CHARS, "").replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -135,11 +152,13 @@ export function extractAssetPaths(html: string): string[] {
 }
 
 /**
- * Extract plain text for search indexing and excerpts.
+ * Extract plain text for search indexing and excerpts. Strips invisible chars
+ * and Siyuan editor metadata.
  */
 export function extractSearchText(html: string): string {
     const $ = load(html);
-    return $.root().text().replace(/\s+/g, " ").trim();
+    $(".protyle-attr").remove();
+    return cleanText($.root().text());
 }
 
 export function makeExcerpt(searchText: string, maxChars = 200): string {
@@ -167,7 +186,8 @@ const ALLOWED_TAGS = [
 
 /**
  * Sanitize Siyuan's rendered HTML and rewrite asset URLs to the public
- * stored_path. Anything outside the allowlist is stripped.
+ * stored_path. Anything outside the allowlist is stripped. `.protyle-attr`
+ * divs (editor metadata) are dropped wholesale.
  */
 export function renderSanitizedHtml(
     siyuanHtml: string,
@@ -186,6 +206,7 @@ export function renderSanitizedHtml(
             "*": ["data-type", "data-node-id", "data-subtype"],
         },
         allowedSchemes: ["http", "https", "mailto"],
+        exclusiveFilter: (frame) => frame.attribs?.class?.includes("protyle-attr") ?? false,
         transformTags: {
             img: (_tagName, attribs) => {
                 const src = attribs.src ?? "";
