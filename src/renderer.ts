@@ -156,12 +156,24 @@ export function extractAssetPaths(html: string): string[] {
 
 /**
  * Extract plain text for search indexing and excerpts. Strips invisible chars
- * and Siyuan editor metadata.
+ * and Siyuan editor metadata. Walks every block (including nested) and reads
+ * only its direct contenteditable child, so blocks don't run together.
  */
 export function extractSearchText(html: string): string {
     const $ = load(html);
     $(".protyle-attr").remove();
-    return cleanText($.root().text());
+    const parts: string[] = [];
+    $('[data-type^="Node"]').each((_, el) => {
+        const editable = $(el).children("[contenteditable]").first();
+        if (editable.length === 0) {
+            return;
+        }
+        const t = cleanText(editable.text());
+        if (t) {
+            parts.push(t);
+        }
+    });
+    return parts.join("\n");
 }
 
 export function makeExcerpt(searchText: string, maxChars = 200): string {
