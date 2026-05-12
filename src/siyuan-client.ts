@@ -91,13 +91,14 @@ export class SiyuanClient {
 
     /**
      * Get a doc's rendered content (HTML representation), plus box and path.
-     * Mode: 0 = default, 4 = all blocks loaded (no lazy chunking).
+     * mode=0 + a large size returns the whole doc (size = max block count per chunk).
+     * Modes 1-7 are scroll/positional modes that return partial chunks.
      */
     getDoc(id: string): Promise<SiyuanGetDoc> {
         return this.call<SiyuanGetDoc>("/api/filetree/getDoc", {
             id,
-            mode: 4,
-            size: 0,
+            mode: 0,
+            size: 102400,
         });
     }
 
