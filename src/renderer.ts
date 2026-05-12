@@ -91,8 +91,18 @@ function parseBlock(el: Element, $: CheerioAPI, unsupported: Set<string>): Snaps
             };
         }
         case "NodeCodeBlock": {
-            const language = $el.find("[data-type='NodeCodeBlock-content']").attr("class")?.match(/language-(\S+)/)?.[1] ?? "";
-            const text = $el.find("[contenteditable]").first().text();
+            // Siyuan code blocks contain:
+            //   .protyle-action[__language]  ← language label (editable, "python" etc.)
+            //   .hljs.language-xxx           ← the actual code body (editable)
+            //   .protyle-attr                ← editor metadata
+            // We must skip the language label and the attr div to grab the code.
+            const clone = $el.clone();
+            clone.find(".protyle-action, .protyle-attr").remove();
+            const langClass = $el.find('[class*="language-"]').attr("class") ?? "";
+            const language =
+                langClass.match(/language-(\S+)/)?.[1] ??
+                $el.find(".protyle-action__language").text().trim();
+            const text = clone.find("[contenteditable]").first().text();
             return { id, type: "NodeCodeBlock", language, text };
         }
         case "NodeBlockquote": {
