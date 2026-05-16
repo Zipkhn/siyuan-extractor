@@ -100,6 +100,84 @@ $SNAPSHOTS_DIR/
 
 Écriture atomique : chaque fichier écrit dans un `*.tmp` sibling puis renommé.
 
+## Smoke tests
+
+Suite courte pour valider la phase 2 ou tester après modification. Pré-requis : extracteur lancé via le compose dev, un doc déjà publié dans le projet `test` (snapshot existant). Adapte `DOCID`, `VERSION`, `PUBAT` aux valeurs réelles.
+
+```bash
+cd /Users/fares/Desktop/Siyuan/deploy/dev
+SECRET=$(grep '^EXTRACTOR_WEBHOOK_SECRET=' .env | cut -d= -f2)
+DOCID=20260512132840-nzy1rmj             # un doc dont le snapshot existe
+VERSION=5                                 # la version actuelle du snapshot
+PUBAT=2026-05-12T11:51:00.550Z            # le publishedAt actuel du snapshot
+```
+
+### 1. Health
+
+```bash
+curl -s http://localhost:3001/health
+# attendu: {"status":"ok"}
+```
+
+### 2. Idempotence content_hash
+
+Renvoyer un webhook `publish` avec la **même version** qu'un snapshot existant ne doit pas réécrire le fichier — le log doit dire `snapshot unchanged; skipping write`.
+
+```bash
+docker compose exec extractor stat -c '%y' /data/snapshots/test/docs/$DOCID.json
+
+curl -s -X POST http://localhost:3001/webhook \
+  -H "Content-Type: application/json" \
+  -H "X-Publish-Secret: $SECRET" \
+  -d "{\"event\":\"publish\",\"project\":\"test\",\"docId\":\"$DOCID\",\"version\":$VERSION,\"publishedAt\":\"$PUBAT\"}"
+# attendu: {"ok":true,"snapshotChanged":false,"jsonPath":"test/docs/<docid>.json","htmlPath":"test/docs/<docid>.html"}
+
+docker compose logs --tail 5 extractor
+# attendu: ligne contenant "snapshot unchanged; skipping write"
+
+docker compose exec extractor stat -c '%y' /data/snapshots/test/docs/$DOCID.json
+# attendu: même timestamp qu'avant
+```
+
+### 3. Unpublish
+
+```bash
+curl -s -X POST http://localhost:3001/webhook \
+  -H "Content-Type: application/json" \
+  -H "X-Publish-Secret: $SECRET" \
+  -d "{\"event\":\"unpublish\",\"project\":\"test\",\"docId\":\"$DOCID\",\"version\":$VERSION,\"publishedAt\":\"$PUBAT\"}"
+# attendu: {"ok":true,"removed":true}
+
+docker compose exec extractor ls /data/snapshots/test/docs/ | grep $DOCID || echo "OK: doc files removed"
+# attendu: "OK: doc files removed"
+
+docker compose exec extractor cat /data/snapshots/test/index.json | python3 -c 'import sys,json; idx=json.load(sys.stdin); ids=[d["id"] for d in idx["docs"]]; print("docs in index:", ids)'
+# attendu: $DOCID ne doit pas être dans la liste
+```
+
+Pour restaurer le snapshot après ce test : republier le doc depuis Siyuan (clic-droit → Plugin → Publier).
+
+### 4. Sécurité du webhook
+
+Webhook sans secret → 401.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3001/webhook \
+  -H "Content-Type: application/json" \
+  -d "{\"event\":\"publish\",\"project\":\"test\",\"docId\":\"$DOCID\",\"version\":$VERSION,\"publishedAt\":\"$PUBAT\"}"
+# attendu: 401
+```
+
+Schéma invalide → 400.
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3001/webhook \
+  -H "Content-Type: application/json" \
+  -H "X-Publish-Secret: $SECRET" \
+  -d '{"event":"publish"}'
+# attendu: 400
+```
+
 ## Sécurité
 
 - Le `SIYUAN_TOKEN` ne quitte JAMAIS le serveur. Pas exposé au reader, pas dans les snapshots.
