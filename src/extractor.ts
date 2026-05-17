@@ -4,11 +4,14 @@ import { SiyuanClient } from "./siyuan-client.js";
 import { extractAssets } from "./assets.js";
 import {
     extractAssetPaths,
+    extractAvPlaceholders,
     extractSearchText,
     makeExcerpt,
     parseSiyuanHtml,
     renderSanitizedHtml,
+    type AvBlockMap,
 } from "./renderer.js";
+import type { SiyuanAvRender } from "./siyuan-client.js";
 import {
     computeContentHash,
     deleteSnapshot,
@@ -85,11 +88,13 @@ export class Extractor {
         });
         const assets: SnapshotAsset[] = [...assetMap.values()];
 
-        const { blocks, unsupportedTypes } = parseSiyuanHtml(html);
+        const avBlocks = await this.fetchAvBlocks(html, log);
+
+        const { blocks, unsupportedTypes } = parseSiyuanHtml(html, avBlocks);
         if (unsupportedTypes.size > 0) {
             log.warn(
                 { types: [...unsupportedTypes] },
-                "some block types are not supported in V1.0 and were skipped from JSON blocks",
+                "some block types are not yet supported and were skipped from JSON blocks",
             );
         }
 
@@ -118,7 +123,9 @@ export class Extractor {
             search_text: searchText,
         };
 
-        const sanitizedHtml = this.config.emitHtml ? renderSanitizedHtml(html, assetMap) : null;
+        const sanitizedHtml = this.config.emitHtml
+            ? renderSanitizedHtml(html, assetMap, avBlocks)
+            : null;
 
         const writeResult = await writeSnapshot({
             snapshotsDir: this.config.snapshotsDir,
@@ -144,6 +151,30 @@ export class Extractor {
         });
 
         return { snapshotChanged: writeResult.snapshotChanged };
+    }
+
+    /**
+     * Pre-fetch every AttributeView referenced in the doc HTML. The kernel's
+     * getDoc response only includes a placeholder div for each AV; the real
+     * column/row data has to come from /api/av/renderAttributeView. Failures
+     * on individual AVs are logged but don't block the snapshot — they fall
+     * through as "unsupported" so the doc still publishes.
+     */
+    private async fetchAvBlocks(html: string, log: Logger): Promise<AvBlockMap> {
+        const placeholders = extractAvPlaceholders(html);
+        const byNodeId = new Map<string, SiyuanAvRender>();
+        for (const { nodeId, avId, viewId } of placeholders) {
+            try {
+                const data = await this.client.renderAttributeView(avId, nodeId, viewId);
+                byNodeId.set(nodeId, data);
+            } catch (err) {
+                log.warn(
+                    { nodeId, avId, viewId, err: (err as Error).message },
+                    "failed to render attribute view; block will be skipped",
+                );
+            }
+        }
+        return { byNodeId };
     }
 
     async handleUnpublish(payload: WebhookPayload): Promise<{ removed: boolean }> {

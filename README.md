@@ -19,11 +19,39 @@ V1 — pour usage personnel. Spec : `docs/v1/architecture.md` sur la branche `cu
 4. **Config centralisée** : `src/config.ts` valide les env vars au boot, échoue fort si manquantes.
 5. **Aucune exposition SQL** : aucun appel à `/api/query/sql`. Liste des endpoints Siyuan utilisés : `/api/attr/getBlockAttrs`, `/api/block/getDocInfo`, `/api/filetree/getDoc`, `/api/file/getFile` (assets uniquement).
 
-## Limites V1.0 (à étendre en V1.1)
+## Couverture des blocs (V1.1)
 
-- Blocs supportés : `NodeHeading`, `NodeParagraph`, `NodeList`, `NodeListItem`, `NodeCodeBlock`, `NodeBlockquote`, `NodeThematicBreak`. Logged + skippés : `NodeTable`, `NodeMathBlock`, `NodeAttributeView`, `NodeSuperBlock`, `NodeImage` (image inline traitée via le HTML sanitisé mais pas extraite en JSON typé).
-- Marks inline (gras, italique, code, lien, strike) : non extraits en JSON V1.0 (`marks: []`). Présents dans le HTML sanitisé.
-- `outbound_refs` : `[]` en V1.0. Implémentation en V1.1.
+| Type Siyuan | JSON typé | HTML sanitisé | Fallback / limite |
+|---|---|---|---|
+| `NodeHeading` | ✅ `{ level, text, marks: [] }` | `<h1>`–`<h6>` | marks inline non extraits |
+| `NodeParagraph` | ✅ `{ text, marks: [] }` | `<p>` ou wrapper Siyuan | marks inline non extraits |
+| `NodeList` / `NodeListItem` | ✅ récursif | `<ul>` / `<ol>` / `<li>` | — |
+| `NodeCodeBlock` | ✅ `{ language, text }` | `<pre><code class="language-…">` | — |
+| `NodeBlockquote` | ✅ récursif | `<blockquote>` | — |
+| `NodeThematicBreak` | ✅ | `<hr>` | — |
+| `NodeImage` | ✅ `{ asset_path, alt, caption }` (uniquement quand un paragraphe ne contient qu'**une seule** image et aucun autre texte significatif) | `<img>` (asset URL réécrite vers `stored_path`) | paragraphe mixte texte+image ou multi-images : reste un `NodeParagraph` typé, l'image survit uniquement dans le HTML |
+| `NodeTable` | ✅ `{ header_row, rows: [[{text, marks: []}]] }` | `<table>` + `<thead>` + `<tbody>` | marks inline par cellule non extraits |
+| `NodeMathBlock` | ✅ `{ text }` (LaTeX brut, depuis `data-content`) | `<pre class="math-block" data-latex="…">$$ … $$</pre>` | rendu mathématique laissé au reader (KaTeX/MathJax côté client) |
+| `NodeSuperBlock` | ✅ `{ layout: "row" \| "col", children }` | `<div data-type="NodeSuperBlock" data-sb-layout="…">` | layout inconnu → fallback `"row"` |
+| `NodeAttributeView` (database) | ✅ `{ view_type, av_name, view_name, columns: [{id, name, type}], rows: [{id, cells: string[]}] }` | `<table class="av-block">` synthétisé (toujours, même pour les vues gallery/kanban) | données pré-fetchées via `/api/av/renderAttributeView`. Si l'appel échoue, bloc loggé + skippé. Types de colonnes inconnus → `type: "unknown"` + valeur best-effort `JSON.stringify(value)` |
+
+Types de colonnes AV reconnus dans `columns[].type` : `block, text, number, date, select, mSelect, url, email, phone, mAsset, template, created, updated, checkbox, relation, rollup, lineNumber`. Tout autre type est passé en `"unknown"` mais la valeur affichée est conservée.
+
+## Limites V1.1 connues
+
+- Marks inline (gras, italique, code, lien, strike) : non extraits en JSON (`marks: []` partout). Présents dans le HTML sanitisé.
+- `outbound_refs` : `[]`. Implémentation ultérieure.
+- Une image au milieu d'un paragraphe (texte + image mélangés) ou plusieurs images dans un même paragraphe ne sont pas typées en JSON — elles restent dans le HTML.
+- Un `NodeAttributeView` dans un doc sans accès au kernel pendant le sync (kernel injoignable, AV supprimée entre-temps) est skippé du JSON. Le placeholder vide reste dans le HTML.
+
+## Tests
+
+```bash
+npm run test         # vitest run (suite complète sur fixtures réelles)
+npm run test:watch   # mode watch
+```
+
+Les fixtures dans `src/__fixtures__/` ont été extraites depuis le stack dev (Siyuan tournant via `deploy/dev/`) et représentent du HTML kernel réel, pas des structures inventées. Les ajouter ou les regénérer : voir `src/__tests__/harness.ts` (`parseAndRender(html, assets?, avBlocks?)`).
 
 ## Configuration
 

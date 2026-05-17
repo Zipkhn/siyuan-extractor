@@ -55,15 +55,37 @@ export type SnapshotBlock =
       }
     | { id: string; type: "NodeMathBlock"; text: string }
     | { id: string; type: "NodeThematicBreak" }
-    | { id: string; type: "NodeImage"; asset_id: number; alt: string; caption: string }
+    | { id: string; type: "NodeImage"; asset_path: string; alt: string; caption: string }
     | {
           id: string;
           type: "NodeAttributeView";
-          view_type: "table" | "gallery";
-          columns: { name: string; type: string }[];
-          rows: Record<string, string>[];
+          view_type: "table" | "gallery" | "kanban";
+          av_name: string;
+          view_name: string;
+          columns: SnapshotAvColumn[];
+          rows: SnapshotAvRow[];
       }
     | { id: string; type: "NodeSuperBlock"; layout: "row" | "col"; children: SnapshotBlock[] };
+
+export interface SnapshotAvColumn {
+    id: string;
+    name: string;
+    /**
+     * Siyuan KeyType (block, text, number, date, select, mSelect, url, email,
+     * phone, mAsset, template, created, updated, checkbox, relation, rollup,
+     * lineNumber). Types the extractor doesn't know how to format produce a
+     * best-effort string and keep their raw KeyType here so the reader can
+     * still decide how to render them. Unknown future types pass through as
+     * "unknown".
+     */
+    type: string;
+}
+
+export interface SnapshotAvRow {
+    id: string;
+    /** Display strings, indexed the same as `columns`. Same length as columns. */
+    cells: string[];
+}
 
 export interface Snapshot {
     schema: typeof SNAPSHOT_SCHEMA;

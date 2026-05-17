@@ -16,6 +16,84 @@ export interface SiyuanDocInfo {
     ial: Record<string, string>;
 }
 
+export type SiyuanAvKeyType =
+    | "block"
+    | "text"
+    | "number"
+    | "date"
+    | "select"
+    | "mSelect"
+    | "url"
+    | "email"
+    | "phone"
+    | "mAsset"
+    | "template"
+    | "created"
+    | "updated"
+    | "checkbox"
+    | "relation"
+    | "rollup"
+    | "lineNumber";
+
+export interface SiyuanAvColumn {
+    id: string;
+    name: string;
+    type: SiyuanAvKeyType;
+    icon?: string;
+    width?: string;
+    hidden?: boolean;
+}
+
+export interface SiyuanAvCell {
+    id: string;
+    valueType: SiyuanAvKeyType;
+    value: Record<string, unknown> & {
+        type?: SiyuanAvKeyType;
+        block?: { content?: string };
+        text?: { content?: string };
+        number?: { content?: number; formattedContent?: string };
+        date?: {
+            content?: number;
+            content2?: number;
+            isNotTime?: boolean;
+            hasEndDate?: boolean;
+            formattedContent?: string;
+        };
+        mSelect?: Array<{ content?: string; color?: string }>;
+        url?: { content?: string };
+        email?: { content?: string };
+        phone?: { content?: string };
+        mAsset?: Array<{ type?: string; name?: string; content?: string }>;
+        checkbox?: { checked?: boolean };
+        template?: { content?: string };
+        created?: { content?: number };
+        updated?: { content?: number };
+        relation?: { contents?: Array<{ block?: { content?: string } }> };
+        rollup?: { contents?: Array<Record<string, unknown>> };
+    };
+}
+
+export interface SiyuanAvRow {
+    id: string;
+    cells: SiyuanAvCell[];
+}
+
+export interface SiyuanAvView {
+    id: string;
+    name: string;
+    type: "table" | "gallery" | "kanban";
+    columns?: SiyuanAvColumn[];
+    rows?: SiyuanAvRow[];
+}
+
+export interface SiyuanAvRender {
+    id: string;
+    name: string;
+    viewType: "table" | "gallery" | "kanban";
+    viewID: string;
+    view: SiyuanAvView;
+}
+
 export interface SiyuanGetDoc {
     box: string;
     path: string;
@@ -99,6 +177,27 @@ export class SiyuanClient {
             id,
             mode: 0,
             size: 102400,
+        });
+    }
+
+    /**
+     * Render an AttributeView (Siyuan database) to its structured JSON.
+     * The kernel returns the doc HTML for an AV as a placeholder; the actual
+     * column/row data only comes from this endpoint, so the extractor must
+     * call it once per AV block it encounters in the doc HTML.
+     */
+    renderAttributeView(
+        avId: string,
+        blockId?: string,
+        viewId?: string,
+    ): Promise<SiyuanAvRender> {
+        return this.call<SiyuanAvRender>("/api/av/renderAttributeView", {
+            id: avId,
+            blockID: blockId ?? "",
+            viewID: viewId ?? "",
+            page: 1,
+            pageSize: 9999,
+            createIfNotExist: false,
         });
     }
 

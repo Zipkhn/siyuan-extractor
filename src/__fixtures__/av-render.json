@@ -1,0 +1,179 @@
+{
+  "id": "20260517092928-pdzrnyp",
+  "isMirror": false,
+  "name": "DB démo",
+  "view": {
+    "id": "20260517092928-gao3myq",
+    "icon": "",
+    "name": "Table",
+    "desc": "",
+    "hideAttrViewName": false,
+    "filters": [],
+    "sorts": [],
+    "group": null,
+    "pageSize": 50,
+    "showIcon": true,
+    "wrapField": false,
+    "groupFolded": false,
+    "groupHidden": 0,
+    "columns": [
+      {
+        "id": "20260517092928-rf1hend",
+        "name": "Primary Key",
+        "type": "block",
+        "icon": "",
+        "wrap": false,
+        "hidden": false,
+        "desc": "",
+        "calc": null,
+        "numberFormat": "",
+        "template": "",
+        "pin": false,
+        "width": ""
+      },
+      {
+        "id": "20260517092928-1c10ioo",
+        "name": "name",
+        "type": "text",
+        "icon": "",
+        "wrap": false,
+        "hidden": false,
+        "desc": "",
+        "calc": null,
+        "numberFormat": "",
+        "template": "",
+        "pin": false,
+        "width": ""
+      },
+      {
+        "id": "20260517093145-oen1azq",
+        "name": "Number",
+        "type": "number",
+        "icon": "",
+        "wrap": false,
+        "hidden": false,
+        "desc": "",
+        "calc": null,
+        "numberFormat": "",
+        "template": "",
+        "pin": false,
+        "width": ""
+      },
+      {
+        "id": "20260517093310-rnx66j2",
+        "name": "Date",
+        "type": "date",
+        "icon": "",
+        "wrap": false,
+        "hidden": false,
+        "desc": "",
+        "calc": null,
+        "numberFormat": "",
+        "template": "",
+        "pin": false,
+        "width": ""
+      }
+    ],
+    "rows": [
+      {
+        "id": "20260517092934-yfc9mwv",
+        "cells": [
+          {
+            "id": "20260517092934-z4089wi",
+            "value": {
+              "id": "20260517092934-z4089wi",
+              "keyID": "20260517092928-rf1hend",
+              "blockID": "20260517092934-yfc9mwv",
+              "type": "block",
+              "isDetached": true,
+              "createdAt": 1779002974823,
+              "updatedAt": 1779003195319,
+              "block": {
+                "content": "1",
+                "created": 1779002974823,
+                "updated": 1779003195319
+              }
+            },
+            "valueType": "block",
+            "color": "",
+            "bgColor": ""
+          },
+          {
+            "id": "20260517092934-vypxwfz",
+            "value": {
+              "id": "20260517092934-vypxwfz",
+              "keyID": "20260517092928-1c10ioo",
+              "blockID": "20260517092934-yfc9mwv",
+              "type": "text",
+              "createdAt": 1779003047524,
+              "updatedAt": 1779003048524,
+              "text": {
+                "content": "KOKO"
+              }
+            },
+            "valueType": "text",
+            "color": "",
+            "bgColor": ""
+          },
+          {
+            "id": "20260517092934-vqmdehx",
+            "value": {
+              "id": "20260517092934-vqmdehx",
+              "keyID": "20260517093145-oen1azq",
+              "blockID": "20260517092934-yfc9mwv",
+              "type": "number",
+              "createdAt": 1779003110524,
+              "updatedAt": 1779003111524,
+              "number": {
+                "content": 34,
+                "isNotEmpty": true,
+                "format": "",
+                "formattedContent": "34"
+              }
+            },
+            "valueType": "number",
+            "color": "",
+            "bgColor": ""
+          },
+          {
+            "id": "20260517092934-4mwmabj",
+            "value": {
+              "id": "20260517092934-4mwmabj",
+              "keyID": "20260517093310-rnx66j2",
+              "blockID": "20260517092934-yfc9mwv",
+              "type": "date",
+              "createdAt": 1779003195319,
+              "updatedAt": 1779003196319,
+              "date": {
+                "content": 1779003180000,
+                "isNotEmpty": true,
+                "hasEndDate": false,
+                "isNotTime": true,
+                "content2": 0,
+                "isNotEmpty2": false,
+                "formattedContent": ""
+              }
+            },
+            "valueType": "date",
+            "color": "",
+            "bgColor": ""
+          }
+        ]
+      }
+    ],
+    "rowCount": 1
+  },
+  "viewID": "20260517092928-gao3myq",
+  "viewType": "table",
+  "views": [
+    {
+      "id": "20260517092928-gao3myq",
+      "icon": "",
+      "name": "Table",
+      "desc": "",
+      "hideAttrViewName": false,
+      "type": "table",
+      "pageSize": 50
+    }
+  ]
+}
