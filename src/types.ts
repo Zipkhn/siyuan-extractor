@@ -21,7 +21,6 @@ export interface SnapshotDoc {
 
 export interface SnapshotAsset {
     original_path: string;
-    stored_path: string;
     sha256: string;
     mime: string;
     size_bytes: number;
@@ -99,18 +98,3 @@ export interface Snapshot {
     search_text: string;
 }
 
-export interface ProjectIndexEntry {
-    id: string;
-    slug: string;
-    title: string;
-    excerpt: string;
-    published_at: string;
-    updated_at: string;
-}
-
-export interface ProjectIndex {
-    project: string;
-    name: string;
-    updated_at: string;
-    docs: ProjectIndexEntry[];
-}

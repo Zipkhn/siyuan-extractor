@@ -24,8 +24,9 @@ export function parseAndRender(
     html: string,
     assets: Map<string, SnapshotAsset> = new Map(),
     avBlocks?: AvBlockMap,
+    project = "test",
 ): ParseAndRenderResult {
     const { blocks, unsupportedTypes } = parseSiyuanHtml(html, avBlocks);
-    const sanitized = renderSanitizedHtml(html, assets, avBlocks);
+    const sanitized = renderSanitizedHtml(html, project, assets, avBlocks);
     return { blocks, unsupportedTypes, html: sanitized };
 }

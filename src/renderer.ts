@@ -376,13 +376,14 @@ const ALLOWED_TAGS = [
 
 /**
  * Sanitize Siyuan's rendered HTML and rewrite asset URLs to the public
- * stored_path. AV placeholders are hydrated from `avBlocks` into a real
- * <table> before sanitization (the kernel only ships a stub for them).
- * Anything outside the allowlist is stripped. `.protyle-attr` divs (editor
- * metadata) are dropped wholesale.
+ * reader URL `/<project>/assets/<sha256>`. AV placeholders are hydrated
+ * from `avBlocks` into a real <table> before sanitization (the kernel only
+ * ships a stub for them). Anything outside the allowlist is stripped.
+ * `.protyle-attr` divs (editor metadata) are dropped wholesale.
  */
 export function renderSanitizedHtml(
     siyuanHtml: string,
+    project: string,
     assets: Map<string, SnapshotAsset>,
     avBlocks?: AvBlockMap,
 ): string {
@@ -409,7 +410,10 @@ export function renderSanitizedHtml(
                 if (src.startsWith("assets/")) {
                     const asset = assets.get(src);
                     if (asset) {
-                        return { tagName: "img", attribs: { ...attribs, src: `/${asset.stored_path}` } };
+                        return {
+                            tagName: "img",
+                            attribs: { ...attribs, src: `/${project}/assets/${asset.sha256}` },
+                        };
                     }
                 }
                 return { tagName: "img", attribs };

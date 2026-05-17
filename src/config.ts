@@ -6,7 +6,8 @@ export interface AppConfig {
     webhookSecret: string;
     host: string;
     port: number;
-    snapshotsDir: string;
+    readerUrl: string;
+    ingestSecret: string;
     emitHtml: boolean;
     logLevel: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 }
@@ -52,7 +53,8 @@ export function loadConfig(): AppConfig {
         webhookSecret: env.WEBHOOK_SECRET?.trim() ?? "",
         host: env.HOST?.trim() || "0.0.0.0",
         port: parseInt10(env.PORT, 3000),
-        snapshotsDir: required("SNAPSHOTS_DIR", env.SNAPSHOTS_DIR),
+        readerUrl: required("READER_URL", env.READER_URL).replace(/\/+$/, ""),
+        ingestSecret: required("INGEST_SECRET", env.INGEST_SECRET),
         emitHtml: parseBool(env.EMIT_HTML, true),
         logLevel: parseLogLevel(env.LOG_LEVEL),
     };
