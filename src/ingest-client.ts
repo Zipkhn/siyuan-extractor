@@ -46,6 +46,8 @@ export interface IngestDocPayload {
     }>;
     search_text: string;
     html: string | null;
+    /** V1.x optional: lets the reader group docs by Siyuan notebook. */
+    notebook_name?: string;
 }
 
 export type PostDocResult =

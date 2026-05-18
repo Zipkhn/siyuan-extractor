@@ -26,6 +26,7 @@ const ATTR_PROJECT = "custom-project";
 const ATTR_PUBLISH_SLUG = "custom-publish-slug";
 const ATTR_PUBLISH_VERSION = "custom-publish-version";
 const ATTR_PUBLISH_UPDATED_AT = "custom-publish-updated-at";
+const ATTR_NOTEBOOK_NAME = "custom-notebook-name";
 
 export class Extractor {
     private readonly config: AppConfig;
@@ -100,6 +101,7 @@ export class Extractor {
             ? renderSanitizedHtml(html, project, assetMap, avBlocks)
             : null;
 
+        const notebookName = attrs[ATTR_NOTEBOOK_NAME];
         const payloadDoc: IngestDocPayload = {
             schema: SNAPSHOT_SCHEMA,
             doc: {
@@ -118,6 +120,7 @@ export class Extractor {
             outbound_refs: [], // V1.1
             search_text: searchText,
             html: sanitizedHtml,
+            ...(notebookName ? { notebook_name: notebookName } : {}),
         };
 
         // 1) Pre-flight: HEAD each asset to know which ones need uploading.
