@@ -78,12 +78,37 @@ export interface SiyuanAvRow {
     cells: SiyuanAvCell[];
 }
 
+/**
+ * A card-style row produced by kanban/gallery layouts. Kernel structs are
+ * KanbanCard / GalleryCard (av/layout_*.go). The `values` array is the
+ * card-shape equivalent of an SiyuanAvRow's `cells[]` — each entry carries
+ * a `keyID` matching a column and a typed `value` (same BaseValue shape as
+ * SiyuanAvCell.value, so cellValueToString works on it unchanged).
+ */
+export interface SiyuanAvCard {
+    id: string;
+    values: SiyuanAvCell[];
+    coverURL?: string;
+    coverContent?: string;
+}
+
 export interface SiyuanAvView {
     id: string;
     name: string;
     type: "table" | "gallery" | "kanban";
+    // Table layout:
     columns?: SiyuanAvColumn[];
     rows?: SiyuanAvRow[];
+    // Kanban / gallery layout (cards = items, fields = columns metadata):
+    fields?: SiyuanAvColumn[];
+    cards?: SiyuanAvCard[];
+    // Kanban with grouping: cards are nested in sub-views (one per group/status)
+    // rather than `cards` at view root. Each entry is itself a View shape.
+    groups?: SiyuanAvView[];
+    // Kanban grouping config. `groupKey` (av.Key) carries the field id+name+type;
+    // `group.field` (ViewGroup) carries just the field id. Either one is enough.
+    groupKey?: { id?: string; name?: string; type?: string };
+    group?: { field?: string };
 }
 
 export interface SiyuanAvRender {
@@ -92,6 +117,23 @@ export interface SiyuanAvRender {
     viewType: "table" | "gallery" | "kanban";
     viewID: string;
     view: SiyuanAvView;
+}
+
+/** Metadata about one view of an AV (no columns/rows, just descriptor). */
+export interface SiyuanAvViewMeta {
+    id: string;
+    name: string;
+    icon?: string;
+    desc?: string;
+    type: "table" | "gallery" | "kanban";
+}
+
+export interface SiyuanAvFull {
+    id: string;
+    name: string;
+    /** The default/active view id. */
+    viewID: string;
+    views: SiyuanAvViewMeta[];
 }
 
 export interface SiyuanGetDoc {
@@ -199,6 +241,30 @@ export class SiyuanClient {
             pageSize: 9999,
             createIfNotExist: false,
         });
+    }
+
+    /**
+     * List all views of an AV (table / gallery / kanban). Returns just the
+     * view descriptors — columns/rows still come from renderAttributeView
+     * called per view id. Used by the V1.x multi-view snapshot pipeline.
+     */
+    async getAttributeView(avId: string): Promise<SiyuanAvFull> {
+        const wrapper = await this.call<{ av: SiyuanAvFull & { views: Array<SiyuanAvViewMeta & { type: string }> } }>(
+            "/api/av/getAttributeView",
+            { id: avId },
+        );
+        const av = wrapper.av;
+        // The kernel returns LayoutType ("table" | "gallery" | "kanban") on
+        // each view; coerce unknown future types to "table" so the rest of
+        // the pipeline doesn't need to handle the empty case.
+        const views = av.views.map((v) => ({
+            ...v,
+            type:
+                v.type === "table" || v.type === "gallery" || v.type === "kanban"
+                    ? v.type
+                    : ("table" as const),
+        }));
+        return { id: av.id, name: av.name, viewID: av.viewID, views };
     }
 
     /**

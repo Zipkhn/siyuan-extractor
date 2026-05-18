@@ -12,6 +12,7 @@ import {
     type AvBlockMap,
 } from "./renderer.js";
 import type { SiyuanAvRender } from "./siyuan-client.js";
+import type { AvBundle } from "./av.js";
 import { computeContentHash } from "./content-hash.js";
 import {
     IngestClient,
@@ -156,27 +157,83 @@ export class Extractor {
     }
 
     /**
-     * Pre-fetch every AttributeView referenced in the doc HTML. The kernel's
-     * getDoc response only includes a placeholder div for each AV; the real
-     * column/row data has to come from /api/av/renderAttributeView. Failures
-     * on individual AVs are logged but don't block the snapshot — they fall
-     * through as "unsupported" so the doc still publishes.
+     * Pre-fetch every AttributeView referenced in the doc HTML. We now fetch
+     * ALL views of each AV (table + gallery + kanban) so the reader can offer
+     * tabs. Per AV:
+     *   1. /api/av/getAttributeView  → list of viewIds + default viewId
+     *   2. /api/av/renderAttributeView per viewId → columns + rows
+     *
+     * Failure modes (defense in depth):
+     * - getAttributeView fails (network, missing AV) → fallback to the single
+     *   active view from the placeholder's viewId (legacy 1-view bundle).
+     * - One view render fails → log, skip that view; the bundle still has the
+     *   others.
+     * - Everything fails → drop the bundle; renderer.ts marks the block as
+     *   unsupported and continues with the rest of the doc.
      */
     private async fetchAvBlocks(html: string, log: Logger): Promise<AvBlockMap> {
         const placeholders = extractAvPlaceholders(html);
-        const byNodeId = new Map<string, SiyuanAvRender>();
+        const byNodeId = new Map<string, AvBundle>();
         for (const { nodeId, avId, viewId } of placeholders) {
+            const bundle = await this.fetchAvBundle(avId, nodeId, viewId, log);
+            if (bundle) byNodeId.set(nodeId, bundle);
+        }
+        return { byNodeId };
+    }
+
+    private async fetchAvBundle(
+        avId: string,
+        nodeId: string,
+        fallbackViewId: string,
+        log: Logger,
+    ): Promise<AvBundle | null> {
+        let viewIds: string[];
+        let defaultViewId: string;
+        let avName: string;
+        try {
+            const meta = await this.client.getAttributeView(avId);
+            viewIds = meta.views.map((v) => v.id);
+            defaultViewId = meta.viewID || viewIds[0] || fallbackViewId;
+            avName = meta.name;
+        } catch (err) {
+            log.warn(
+                { nodeId, avId, err: (err as Error).message },
+                "getAttributeView failed; falling back to single-view bundle",
+            );
             try {
-                const data = await this.client.renderAttributeView(avId, nodeId, viewId);
-                byNodeId.set(nodeId, data);
+                const single = await this.client.renderAttributeView(avId, nodeId, fallbackViewId);
+                return {
+                    avId,
+                    avName: single.name,
+                    defaultViewId: single.viewID,
+                    renders: [single],
+                };
+            } catch (e2) {
+                log.warn(
+                    { nodeId, avId, err: (e2 as Error).message },
+                    "fallback single-view render failed; AV block dropped",
+                );
+                return null;
+            }
+        }
+
+        const renders: SiyuanAvRender[] = [];
+        for (const vid of viewIds) {
+            try {
+                const r = await this.client.renderAttributeView(avId, nodeId, vid);
+                renders.push(r);
             } catch (err) {
                 log.warn(
-                    { nodeId, avId, viewId, err: (err as Error).message },
-                    "failed to render attribute view; block will be skipped",
+                    { nodeId, avId, viewId: vid, err: (err as Error).message },
+                    "failed to render AV view; skipping (other views kept)",
                 );
             }
         }
-        return { byNodeId };
+        if (renders.length === 0) {
+            log.warn({ nodeId, avId }, "no AV view could be rendered; block dropped");
+            return null;
+        }
+        return { avId, avName, defaultViewId, renders };
     }
 
     async handleUnpublish(

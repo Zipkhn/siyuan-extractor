@@ -3,7 +3,25 @@ import type {
     SiyuanAvKeyType,
     SiyuanAvRender,
 } from "./siyuan-client.js";
-import type { SnapshotAvColumn, SnapshotAvRow, SnapshotBlock } from "./types.js";
+import type {
+    SnapshotAvColumn,
+    SnapshotAvRow,
+    SnapshotAvView,
+    SnapshotBlock,
+} from "./types.js";
+
+/**
+ * All views of one AV (Siyuan database) instance, plus its name and the id
+ * of the default/active view. The extractor pre-fetches this per AV block
+ * embedded in a doc.
+ */
+export interface AvBundle {
+    avId: string;
+    avName: string;
+    defaultViewId: string;
+    /** One render per view of the AV. Order matches the user's view tabs. */
+    renders: SiyuanAvRender[];
+}
 
 /**
  * Known Siyuan column types we know how to format. Anything else is exposed
@@ -144,22 +162,54 @@ function columnType(type: string): string {
 
 export interface AvBlockConversion {
     block: SnapshotBlock;
-    /** Synthesized HTML representation (always a <table>, even for gallery/kanban). */
+    /** Synthesized HTML fallback (always a <table>) — the active/default view rendered flat. */
     html: string;
 }
 
 /**
- * Convert an AV render payload (from /api/av/renderAttributeView) into a
- * typed snapshot block + an HTML table representation. The block id is the
- * Siyuan editor block id (data-node-id), not the AV's own id.
+ * Convert a bundle (all views of an AV) into a snapshot block with `views[]`,
+ * plus an HTML fallback table for the default view. The reader uses `views[]`
+ * to drive its tab switcher; the HTML table is the no-JS / older-snapshot
+ * fallback inside the <av-placeholder>.
  */
 export function convertAttributeView(
     nodeId: string,
-    av: SiyuanAvRender,
+    bundle: AvBundle,
 ): AvBlockConversion {
-    const view = av.view;
-    const rawColumns = view?.columns ?? [];
-    const rawRows = view?.rows ?? [];
+    const views: SnapshotAvView[] = bundle.renders.map((r) => buildSnapshotView(r));
+    const fallbackView =
+        views.find((v) => v.id === bundle.defaultViewId) ?? views[0] ?? null;
+
+    const block: SnapshotBlock = {
+        id: nodeId,
+        type: "NodeAttributeView",
+        av_name: bundle.avName,
+        default_view_id: bundle.defaultViewId,
+        views,
+    };
+
+    const html = fallbackView
+        ? renderAvHtml(bundle.avName, fallbackView.columns, fallbackView.rows)
+        : `<table class="av-block"><caption>${escapeHtml(bundle.avName)}</caption></table>`;
+    return { block, html };
+}
+
+function buildSnapshotView(render: SiyuanAvRender): SnapshotAvView {
+    const view = render.view;
+
+    // Table layout uses columns+rows; kanban/gallery use fields+cards; a
+    // grouped kanban additionally nests its cards inside view.groups[i].cards
+    // (one entry per group/status). Collect from every shape and flatten
+    // everything to a single columns[] + rows[] pair.
+    const rawColumns = view?.columns ?? view?.fields ?? [];
+    const tableRows = view?.rows ?? [];
+    const directCards = view?.cards ?? [];
+    const groupedCards = Array.isArray(view?.groups)
+        ? view.groups.flatMap((g) => g.cards ?? [])
+        : [];
+
+    const usingTableRows = tableRows.length > 0;
+    const cardItems = directCards.length > 0 ? directCards : groupedCards;
 
     const visibleColumns = rawColumns.filter((c) => !c.hidden);
     const visibleColIds = new Set(visibleColumns.map((c) => c.id));
@@ -170,31 +220,44 @@ export function convertAttributeView(
         type: columnType(c.type),
     }));
 
-    const rows: SnapshotAvRow[] = rawRows.map((row, rowIndex) => {
-        const cellsByColId = new Map<string, string>();
-        for (const cell of row.cells) {
-            // cell.value.keyID is the column id this cell maps to.
-            const keyId = (cell.value.keyID as string | undefined) ?? "";
-            if (!visibleColIds.has(keyId)) continue;
-            cellsByColId.set(keyId, cellValueToString(cell, rowIndex));
-        }
-        // Order cells to match the visible-columns order. Missing cells get "".
-        const cells = visibleColumns.map((c) => cellsByColId.get(c.id) ?? "");
-        return { id: row.id, cells };
-    });
+    const rows: SnapshotAvRow[] = (usingTableRows ? tableRows : cardItems).map(
+        (item, rowIndex) => {
+            const cellsByColId = new Map<string, string>();
+            const cellLike = usingTableRows
+                ? (item as (typeof tableRows)[number]).cells
+                : (item as (typeof cardItems)[number]).values;
+            for (const cell of cellLike) {
+                const keyId = (cell.value.keyID as string | undefined) ?? "";
+                if (!visibleColIds.has(keyId)) continue;
+                cellsByColId.set(keyId, cellValueToString(cell, rowIndex));
+            }
+            const cells = visibleColumns.map((c) => cellsByColId.get(c.id) ?? "");
+            return { id: item.id, cells };
+        },
+    );
 
-    const block: SnapshotBlock = {
-        id: nodeId,
-        type: "NodeAttributeView",
-        view_type: av.viewType,
-        av_name: av.name,
-        view_name: view?.name ?? "",
+    const rawType = render.viewType ?? view?.type;
+    const type: SnapshotAvView["type"] =
+        rawType === "table" || rawType === "gallery" || rawType === "kanban"
+            ? rawType
+            : "unknown";
+
+    // Kanban group_key_id: try groupKey.id first (av.Key.ID), fall back to
+    // group.field (av.ViewGroup.Field). Either reliably points at the
+    // grouping column. null → reader silently degrades to table.
+    const groupKeyId =
+        type === "kanban"
+            ? (view?.groupKey?.id ?? view?.group?.field ?? null)
+            : null;
+
+    return {
+        id: render.viewID,
+        name: view?.name ?? "",
+        type,
         columns,
         rows,
+        ...(type === "kanban" ? { group_key_id: groupKeyId } : {}),
     };
-
-    const html = renderAvHtml(av.name, columns, rows);
-    return { block, html };
 }
 
 function escapeHtml(s: string): string {

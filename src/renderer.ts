@@ -2,7 +2,7 @@ import { load, type CheerioAPI } from "cheerio";
 import type { Element } from "domhandler";
 import sanitizeHtml from "sanitize-html";
 import { convertAttributeView } from "./av.js";
-import type { SiyuanAvRender } from "./siyuan-client.js";
+import type { AvBundle } from "./av.js";
 import type { SnapshotBlock, SnapshotAsset } from "./types.js";
 
 /**
@@ -14,8 +14,8 @@ import type { SnapshotBlock, SnapshotAsset } from "./types.js";
  * same AV can be mirrored under multiple block ids in a single doc.
  */
 export interface AvBlockMap {
-    /** node-id (block id) → kernel render payload */
-    byNodeId: Map<string, SiyuanAvRender>;
+    /** node-id (block id) → all views of the AV mounted at that block */
+    byNodeId: Map<string, AvBundle>;
 }
 
 /**
@@ -372,6 +372,10 @@ const ALLOWED_TAGS = [
     "figure", "figcaption",
     "span", "div",
     "table", "thead", "tbody", "tr", "th", "td", "caption",
+    // Custom element: the reader hydrates this into a React <AttributeView>
+    // with tabs. The inner <table> fallback is preserved if hydration is
+    // skipped or fails. Browsers treat unknown elements as transparent.
+    "av-placeholder",
 ];
 
 /**
@@ -400,6 +404,7 @@ export function renderSanitizedHtml(
             pre: ["class", "data-latex"],
             th: ["scope", "data-av-col-type"],
             table: ["class"],
+            "av-placeholder": ["data-node-id"],
             "*": ["data-type", "data-node-id", "data-subtype", "data-sb-layout"],
         },
         allowedSchemes: ["http", "https", "mailto"],
@@ -472,13 +477,19 @@ function hydrateAvPlaceholders(html: string, avBlocks: AvBlockMap): string {
     $('[data-type="NodeAttributeView"]').each((_, el) => {
         const $el = $(el);
         const nodeId = $el.attr("data-node-id") ?? "";
-        const av = avBlocks.byNodeId.get(nodeId);
-        if (!av) {
+        const bundle = avBlocks.byNodeId.get(nodeId);
+        if (!bundle) {
             $el.empty();
             return;
         }
-        const { html: tableHtml } = convertAttributeView(nodeId, av);
-        $el.empty().append(tableHtml);
+        const { html: tableHtml } = convertAttributeView(nodeId, bundle);
+        // Wrap in a custom element the reader will hydrate into a React
+        // <AttributeView> with tabs (table / kanban / gallery). The inner
+        // <table> is the no-JS fallback (and the rendering for older
+        // snapshots that don't carry views[]).
+        $el.empty().append(
+            `<av-placeholder data-node-id="${nodeId}">${tableHtml}</av-placeholder>`,
+        );
     });
     // Cheerio adds <html><head><body> wrappers when given a fragment.
     // Take just the body's innerHTML so we return the same shape as input.

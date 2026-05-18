@@ -58,11 +58,10 @@ export type SnapshotBlock =
     | {
           id: string;
           type: "NodeAttributeView";
-          view_type: "table" | "gallery" | "kanban";
           av_name: string;
-          view_name: string;
-          columns: SnapshotAvColumn[];
-          rows: SnapshotAvRow[];
+          /** Identifies which entry in `views[]` is the "default" tab. */
+          default_view_id: string;
+          views: SnapshotAvView[];
       }
     | { id: string; type: "NodeSuperBlock"; layout: "row" | "col"; children: SnapshotBlock[] };
 
@@ -84,6 +83,16 @@ export interface SnapshotAvRow {
     id: string;
     /** Display strings, indexed the same as `columns`. Same length as columns. */
     cells: string[];
+}
+
+export interface SnapshotAvView {
+    id: string;
+    name: string;
+    type: "table" | "gallery" | "kanban" | "unknown";
+    columns: SnapshotAvColumn[];
+    rows: SnapshotAvRow[];
+    /** For kanban only: id of the column the rows are grouped by. Null when missing or not applicable. */
+    group_key_id?: string | null;
 }
 
 export interface Snapshot {
